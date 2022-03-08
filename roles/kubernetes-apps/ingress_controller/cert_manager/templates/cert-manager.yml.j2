@@ -60,6 +60,19 @@ metadata:
     app.kubernetes.io/component: "webhook"
     app.kubernetes.io/version: "{{ cert_manager_version }}"
 ---
+# Source: cert-manager/templates/webhook-config.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cert-manager-webhook
+  namespace: {{ cert_manager_namespace }}
+  labels:
+    app: webhook
+    app.kubernetes.io/name: webhook
+    app.kubernetes.io/instance: cert-manager
+    app.kubernetes.io/component: "webhook"
+data:
+---
 # Source: cert-manager/templates/cainjector-rbac.yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -176,7 +189,7 @@ rules:
     verbs: ["create", "delete", "get", "list", "watch"]
   - apiGroups: [""]
     resources: ["secrets"]
-    verbs: ["get", "list", "watch", "create", "update", "delete"]
+    verbs: ["get", "list", "watch", "create", "update", "delete", "patch"]
   - apiGroups: [""]
     resources: ["events"]
     verbs: ["create", "patch"]
@@ -630,7 +643,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: cert-manager-cainjector:leaderelection
-  namespace: {{ cert_manager_namespace }}
+  namespace: {{ cert_manager_leader_election_namespace }}
   labels:
     app: cainjector
     app.kubernetes.io/name: cainjector
@@ -664,7 +677,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: cert-manager:leaderelection
-  namespace: {{ cert_manager_namespace }}
+  namespace: {{ cert_manager_leader_election_namespace }}
   labels:
     app: cert-manager
     app.kubernetes.io/name: cert-manager
@@ -719,7 +732,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: cert-manager-cainjector:leaderelection
-  namespace: {{ cert_manager_namespace }}
+  namespace: {{ cert_manager_leader_election_namespace }}
   labels:
     app: cainjector
     app.kubernetes.io/name: cainjector
@@ -742,7 +755,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: cert-manager:leaderelection
-  namespace: {{ cert_manager_namespace }}
+  namespace: {{ cert_manager_leader_election_namespace }}
   labels:
     app: cert-manager
     app.kubernetes.io/name: cert-manager
@@ -823,7 +836,7 @@ spec:
   - name: https
     port: 443
     protocol: TCP
-    targetPort: 10250
+    targetPort: "https"
   selector:
     app.kubernetes.io/name: webhook
     app.kubernetes.io/instance: cert-manager
@@ -866,7 +879,7 @@ spec:
           imagePullPolicy: {{ k8s_image_pull_policy }}
           args:
           - --v=2
-          - --leader-election-namespace=kube-system
+          - --leader-election-namespace={{ cert_manager_leader_election_namespace }}
           env:
           - name: POD_NAMESPACE
             valueFrom:
@@ -874,6 +887,18 @@ spec:
                 fieldPath: metadata.namespace
           resources:
             {}
+{% if cert_manager_tolerations %}
+      tolerations:
+        {{ cert_manager_tolerations | to_nice_yaml(indent=2) | indent(width=8) }}
+{% endif %}
+{% if cert_manager_nodeselector %}
+      nodeSelector:
+        {{ cert_manager_nodeselector | to_nice_yaml | indent(width=8) }}
+{% endif %}
+{% if cert_manager_affinity %}
+      affinity:
+        {{ cert_manager_affinity | to_nice_yaml | indent(width=8) }}
+{% endif %}
 ---
 {% if cert_manager_trusted_internal_ca is defined %}
 apiVersion: v1
@@ -928,7 +953,7 @@ spec:
           args:
           - --v=2
           - --cluster-resource-namespace=$(POD_NAMESPACE)
-          - --leader-election-namespace=kube-system
+          - --leader-election-namespace={{ cert_manager_leader_election_namespace }}
           ports:
           - containerPort: 9402
             protocol: TCP
@@ -939,6 +964,18 @@ spec:
                 fieldPath: metadata.namespace
           resources:
             {}
+{% if cert_manager_tolerations %}
+      tolerations:
+        {{ cert_manager_tolerations | to_nice_yaml(indent=2) | indent(width=8) }}
+{% endif %}
+{% if cert_manager_nodeselector %}
+      nodeSelector:
+        {{ cert_manager_nodeselector | to_nice_yaml | indent(width=8) }}
+{% endif %}
+{% if cert_manager_affinity %}
+      affinity:
+        {{ cert_manager_affinity | to_nice_yaml | indent(width=8) }}
+{% endif %}
 {% if cert_manager_trusted_internal_ca is defined %}
           volumeMounts:
           - mountPath: /etc/ssl/certs/internal-ca.pem
@@ -1023,6 +1060,18 @@ spec:
                 fieldPath: metadata.namespace
           resources:
             {}
+{% if cert_manager_tolerations %}
+      tolerations:
+        {{ cert_manager_tolerations | to_nice_yaml(indent=2) | indent(width=8) }}
+{% endif %}
+{% if cert_manager_nodeselector %}
+      nodeSelector:
+        {{ cert_manager_nodeselector | to_nice_yaml | indent(width=8) }}
+{% endif %}
+{% if cert_manager_affinity %}
+      affinity:
+        {{ cert_manager_affinity | to_nice_yaml | indent(width=8) }}
+{% endif %}
 ---
 # Source: cert-manager/templates/webhook-mutating-webhook.yaml
 apiVersion: admissionregistration.k8s.io/v1
@@ -1050,15 +1099,7 @@ webhooks:
           - UPDATE
         resources:
           - "*/*"
-    # We don't actually support `v1beta1` but is listed here as it is a
-    # required value for
-    # [Kubernetes v1.16](https://github.com/kubernetes/kubernetes/issues/82025).
-    # The API server reads the supported versions in order, so _should always_
-    # attempt a `v1` request which is understood by the cert-manager webhook.
-    # Any `v1beta1` request will return an error and fail closed for that
-    # resource (the whole object request is rejected). When we no longer
-    # support v1.16 we can remove `v1beta1` from this list.
-    admissionReviewVersions: ["v1", "v1beta1"]
+    admissionReviewVersions: ["v1"]
     # This webhook only accepts v1 cert-manager resources.
     # Equivalent matchPolicy ensures that non-v1 resource requests are sent to
     # this webhook (after the resources have been converted to v1).
@@ -1109,15 +1150,7 @@ webhooks:
           - UPDATE
         resources:
           - "*/*"
-    # We don't actually support `v1beta1` but is listed here as it is a
-    # required value for
-    # [Kubernetes v1.16](https://github.com/kubernetes/kubernetes/issues/82025).
-    # The API server reads the supported versions in order, so _should always_
-    # attempt a `v1` request which is understood by the cert-manager webhook.
-    # Any `v1beta1` request will return an error and fail closed for that
-    # resource (the whole object request is rejected). When we no longer
-    # support v1.16 we can remove `v1beta1` from this list.
-    admissionReviewVersions: ["v1", "v1beta1"]
+    admissionReviewVersions: ["v1"]
     # This webhook only accepts v1 cert-manager resources.
     # Equivalent matchPolicy ensures that non-v1 resource requests are sent to
     # this webhook (after the resources have been converted to v1).

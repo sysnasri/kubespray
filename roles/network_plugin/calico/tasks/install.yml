@@ -20,6 +20,7 @@
   template:
     src: "cni-calico.conflist.j2"
     dest: "/etc/cni/net.d/calico.conflist.template"
+    mode: 0644
     owner: root
   register: calico_conflist
   notify: reset_calico_cni
@@ -122,10 +123,18 @@
     - enable_dual_stack_networks
 
 - block:
+    - name: Calico | Check if extra directory is needed
+      stat:
+        path: "{{ local_release_dir }}/calico-{{ calico_version }}-kdd-crds/kdd"
+      register: kdd_path
+    - name: Calico | Set kdd path
+      set_fact:
+        calico_kdd_path: "{{ local_release_dir }}/calico-{{ calico_version }}-kdd-crds{{ '/kdd' if kdd_path.stat.exists is defined and kdd_path.stat.exists }}"
     - name: Calico | Create calico manifests for kdd
       assemble:
-        src: "{{ local_release_dir }}/calico-{{ calico_version }}-kdd-crds"
+        src: "{{ calico_kdd_path }}"
         dest: "{{ kube_config_dir }}/kdd-crds.yml"
+        mode: 0644
         delimiter: "---\n"
         regexp: ".*\\.yaml"
         remote_src: true
@@ -330,6 +339,7 @@
   template:
     src: "{{ item.file }}.j2"
     dest: "{{ kube_config_dir }}/{{ item.file }}"
+    mode: 0644
   with_items:
     - {name: calico-config, file: calico-config.yml, type: cm}
     - {name: calico-node, file: calico-node.yml, type: ds}
@@ -346,6 +356,7 @@
   template:
     src: "{{ item.file }}.j2"
     dest: "{{ kube_config_dir }}/{{ item.file }}"
+    mode: 0644
   with_items:
     - {name: calico, file: calico-typha.yml, type: typha}
   register: calico_node_typha_manifest
@@ -429,4 +440,15 @@
     - "{{ peers|selectattr('scope','undefined')|list|default([]) | union(peers|selectattr('scope','defined')|selectattr('scope','equalto', 'node')|list|default([])) }}"
   when:
     - peer_with_router|default(false)
+    - inventory_hostname in groups['k8s_cluster']
+
+- name: Calico | Configure ipam strictaffinity
+  command:
+    cmd: "{{ bin_dir }}/calicoctl.sh ipam configure --strictaffinity={{ calico_ipam_strictaffinity }}"
+  register: output
+  retries: 4
+  until: output.rc == 0
+  delay: "{{ retry_stagger | random + 3 }}"
+  when:
+    - calico_ipam_strictaffinity is defined
     - inventory_hostname in groups['k8s_cluster']

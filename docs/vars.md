@@ -37,6 +37,9 @@ Some variables of note include:
   public/floating and private IPs.
 * *ansible_default_ipv4.address* - Not Kubespray-specific, but it is used if ip
   and access_ip are undefined
+* *ip6* - IPv6 address to use for binding services. (host var)
+  If *enable_dual_stack_networks* is set to ``true`` and *ip6* is defined,
+  kubelet's ``--node-ip`` and node's ``InternalIP`` will be the combination of *ip* and *ip6*.
 * *loadbalancer_apiserver* - If defined, all hosts will connect to this
   address instead of localhost for kube_control_planes and kube_control_plane[0] for
   kube_nodes. See more details in the
@@ -52,7 +55,11 @@ Kubernetes needs some parameters in order to get deployed. These are the
 following default cluster parameters:
 
 * *cluster_name* - Name of cluster (default is cluster.local)
-* *container_manager* - Container Runtime to install in the nodes (default is docker)
+* *container_manager* - Container Runtime to install in the nodes (default is containerd)
+* *image_command_tool* - Tool used to pull images (default depends on `container_manager`
+  and is `nerdctl` for `containerd`, `crictl` for `crio`, `docker` for `docker`)
+* *image_command_tool_on_localhost* - Tool used to pull images on localhost
+  (default is equal to `image_command_tool`)
 * *dns_domain* - Name of cluster DNS domain (default is cluster.local)
 * *kube_network_plugin* - Plugin to use for container networking
 * *kube_service_addresses* - Subnet for cluster IPs (default is

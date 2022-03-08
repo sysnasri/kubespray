@@ -101,6 +101,7 @@
     - crictl.stat.exists
     - container_manager in ["crio", "containerd"]
     - deploy_container_engine
+  ignore_errors: true  # noqa ignore-errors
 
 - name: reset | stop and disable crio service
   service:
@@ -146,6 +147,8 @@
   rescue:
     - name: reset | force remove all cri pods (rescue)
       shell: "ip netns list | cut -d' ' -f 1 | xargs -n1 ip netns delete && {{ bin_dir }}/crictl rmp -a -f"
+      ignore_errors: true  # noqa ignore-errors
+      changed_when: true
 
 - name: reset | stop etcd services
   service:
@@ -264,6 +267,7 @@
   with_items:
     - "{{ kube_config_dir }}"
     - /var/lib/kubelet
+    - "{{ containerd_storage_dir }}"
     - "{{ ansible_env.HOME | default('/root') }}/.kube"
     - "{{ ansible_env.HOME | default('/root') }}/.helm"
     - "{{ etcd_data_dir }}"
@@ -271,6 +275,7 @@
     - "{{ etcd_config_dir }}"
     - /var/log/calico
     - /etc/cni
+    - /etc/nerdctl
     - "{{ nginx_config_dir }}"
     - /etc/dnsmasq.d
     - /etc/dnsmasq.conf
@@ -323,13 +328,15 @@
     - /etc/bash_completion.d/nerdctl
     - /etc/bash_completion.d/krew
     - /etc/bash_completion.d/krew.sh
-    - "{{ krew_root_dir | default('/usr/local/krew') }}"
+    - "{{ krew_root_dir }}"
     - /etc/modules-load.d/kube_proxy-ipvs.conf
     - /etc/modules-load.d/kubespray-br_netfilter.conf
     - /etc/modules-load.d/kubespray-kata-containers.conf
     - /usr/libexec/kubernetes
     - /etc/origin/openvswitch
     - /etc/origin/ovn
+    - "{{ sysctl_file_path }}"
+    - /etc/crictl.yaml
   ignore_errors: true  # noqa ignore-errors
   tags:
     - files

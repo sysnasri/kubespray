@@ -13,7 +13,7 @@ the _etcd_ group into the _k8s_cluster_, unless you are certain
 to do that and you have it fully contained in the latter:
 
 ```ShellSession
-k8s_cluster ⊂ etcd => kube_node ∩ etcd = etcd
+etcd ⊂ k8s_cluster => kube_node ∩ etcd = etcd
 ```
 
 When _kube_node_ contains _etcd_, you define your etcd cluster to be as well schedulable for Kubernetes workloads.
@@ -202,6 +202,7 @@ The following tags are defined in playbooks:
 |             vsphere-csi-driver | Configuring csi driver: vsphere
 |                          weave | Network plugin Weave
 |                      win_nodes | Running windows specific tasks
+|                          youki | Configuring youki runtime
 
 Note: Use the ``bash scripts/gen_tags.sh`` command to generate a list of all
 tags found in the codebase. New tags will be listed with the empty "Used for"

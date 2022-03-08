@@ -1,6 +1,11 @@
 # noqa role-name - this is a meta role that doesn't need a name
 ---
 dependencies:
+  - role: container-engine/validate-container-engine
+    tags:
+      - container-engine
+      - validate-container-engine
+
   - role: container-engine/kata-containers
     when:
       - kata_containers_enabled
@@ -22,6 +27,14 @@ dependencies:
     tags:
       - container-engine
       - crun
+
+  - role: container-engine/youki
+    when:
+      - youki_enabled
+      - container_manager == 'crio'
+    tags:
+      - container-engine
+      - youki
 
   - role: container-engine/cri-o
     when:
